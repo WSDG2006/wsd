@@ -1,0 +1,3196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>日常签到系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+    </script>
+    <style>
+        /* ===== 全部样式（与最终版本一致） ===== */
+        :root {
+            --primary: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --radius: 16px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.08);
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: var(--font);
+            background: linear-gradient(135deg, #f0f4ff 0%, #fafbff 100%);
+            color: var(--gray-800);
+            min-height: 100vh;
+            padding: 16px;
+            -webkit-font-smoothing: antialiased;
+            position: relative;
+        }
+
+        /* ===== 水印 ===== */
+        .watermark {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.2;
+            color: #6b7280;
+            font-weight: 600;
+            font-size: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: center;
+            justify-content: center;
+            gap: 80px 120px;
+            transform: rotate(-25deg) scale(1.2);
+            user-select: none;
+            font-family: var(--font);
+            letter-spacing: 1px;
+            background: repeating-linear-gradient(transparent, transparent 180px, rgba(0,0,0,0.02) 180px, rgba(0,0,0,0.02) 181px);
+            text-align: center;
+        }
+        .watermark .wm-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.4;
+            white-space: nowrap;
+            text-shadow: 0 0 4px rgba(255,255,255,0.3);
+        }
+        .watermark .wm-item .wm-line1 { font-size: 1.1em; }
+        .watermark .wm-item .wm-line2 { font-size: 0.9em; opacity: 0.8; }
+        @media (max-width:768px) {
+            .watermark { font-size: 14px; gap: 60px 80px; transform: rotate(-20deg) scale(1); }
+        }
+        @media print { .watermark { display: none !important; } }
+
+        /* ===== Toast ===== */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 420px;
+            width: 90%;
+            pointer-events: none;
+        }
+        .toast-container .toast { pointer-events: auto; }
+        .toast {
+            padding: 14px 22px;
+            border-radius: var(--radius);
+            background: rgba(31, 41, 55, 0.92);
+            backdrop-filter: blur(12px);
+            color: #fff;
+            font-size: 14px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .toast.success { background: rgba(16, 185, 129, 0.92); }
+        .toast.error { background: rgba(239, 68, 68, 0.92); }
+        .toast.warning { background: rgba(245, 158, 11, 0.92); }
+        .toast.info { background: rgba(79, 70, 229, 0.92); }
+        @keyframes slideIn {
+            0% { opacity: 0; transform: translateY(-20px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .toast .close {
+            margin-left: auto;
+            cursor: pointer;
+            opacity: 0.6;
+            font-size: 20px;
+            line-height: 1;
+            background: none;
+            border: none;
+            color: inherit;
+            transition: 0.2s;
+        }
+        .toast .close:hover { opacity: 1; }
+
+        /* ===== 应用容器 ===== */
+        .app {
+            max-width: 1320px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ===== 头部 ===== */
+        .header {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            min-height: 70px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--gray-900);
+        }
+        .brand .icon {
+            width: 38px;
+            height: 38px;
+            background: var(--primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+        .brand .badge {
+            font-size: 12px;
+            font-weight: 500;
+            background: #eef2ff;
+            color: var(--primary);
+            padding: 2px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(79, 70, 229, 0.15);
+            margin-left: 4px;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .header-date {
+            font-size: 14px;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+        .header-date strong { color: var(--gray-700); }
+        .btn-toggle-admin {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 10px;
+            background: var(--gray-100);
+            color: var(--gray-600);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+        }
+        .btn-toggle-admin:hover { background: var(--gray-200); color: var(--gray-800); }
+        .btn-toggle-admin.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+        }
+        .btn-toggle-admin.active:hover { background: #4338ca; }
+
+        /* ===== 主体 ===== */
+        .body { padding: 24px 28px; }
+        .panel { display: none; animation: fadeUp 0.35s ease; }
+        .panel.active { display: block; }
+        @keyframes fadeUp {
+            0% { opacity: 0; transform: translateY(12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: var(--radius);
+            padding: 22px 26px;
+            margin-bottom: 22px;
+            box-shadow: var(--shadow);
+            transition: 0.2s;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .card:hover {
+            box-shadow: var(--shadow-lg);
+            border-color: rgba(255, 255, 255, 0.9);
+        }
+        .card-title {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--gray-800);
+            flex-shrink: 0;
+        }
+        .card-title .sub {
+            font-weight: 400;
+            font-size: 13px;
+            color: var(--gray-400);
+            margin-left: auto;
+            background: var(--gray-100);
+            padding: 2px 12px;
+            border-radius: 20px;
+        }
+        .card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 15px;
+        }
+        .status-bar .label { font-weight: 500; color: var(--gray-600); }
+        .status-bar .mode-badge {
+            font-weight: 700;
+            padding: 4px 16px;
+            border-radius: 30px;
+            font-size: 16px;
+        }
+        .status-bar .mode-badge.status-signin { background: #d1fae5; color: #065f46; }
+        .status-bar .mode-badge.status-signout { background: #fef3c7; color: #92400e; }
+        .status-bar .mode-badge.status-late { background: #fef3c7; color: #92400e; }
+        .status-bar .mode-badge.status-absent { background: #fee2e2; color: #991b1b; }
+        .status-bar .mode-badge.status-early { background: #fef3c7; color: #92400e; }
+        .status-bar .time-hint { color: var(--gray-500); font-size: 14px; }
+
+        /* ===== 2x2 网格布局 ===== */
+        .checkin-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+        }
+        .checkin-grid .grid-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .checkin-grid .grid-item .card {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        @media (max-width: 768px) {
+            .checkin-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+        }
+
+        /* 摄像头 */
+        #reader {
+            width: 100%;
+            max-width: 100%;
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: #0b0e14;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            margin: 0 auto;
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            position: relative;
+        }
+        #reader video {
+            display: block;
+            width: 100%;
+            height: auto;
+            filter: contrast(1.05) brightness(0.95);
+        }
+        #reader::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 60%;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-radius: 12px;
+            pointer-events: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+            transition: border-color 0.3s;
+        }
+        #reader.scan-active::after {
+            border-color: var(--success);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4), 0 0 20px rgba(16, 185, 129, 0.2);
+        }
+
+        .scanner-status {
+            font-size: 13px;
+            color: var(--gray-500);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.04);
+            padding: 6px 18px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            margin-top: 10px;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .scanner-status .dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--gray-300);
+            transition: 0.2s;
+        }
+        .scanner-status .dot.active {
+            background: var(--success);
+            animation: pulse 1.4s ease-in-out infinite;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.6; }
+        }
+
+        .manual-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+        .manual-row .form-group { flex: 1 1 200px; min-width: 140px; }
+        .manual-row .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-600);
+            margin-bottom: 4px;
+        }
+        .manual-row .form-control {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 12px;
+            font-size: 14px;
+            transition: 0.2s;
+            background: #fff;
+            color: var(--gray-800);
+            font-family: inherit;
+        }
+        .manual-row .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+            white-space: nowrap;
+            background: var(--gray-100);
+            color: var(--gray-700);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover { background: #4338ca; box-shadow: 0 6px 24px rgba(79, 70, 229, 0.4); }
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+        }
+        .btn-success:hover { background: #059669; }
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+        }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-outline {
+            background: transparent;
+            border: 1.5px solid var(--gray-200);
+            box-shadow: none;
+        }
+        .btn-outline:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-300);
+        }
+        .btn-sm { padding: 6px 16px; font-size: 13px; border-radius: 10px; }
+        .btn-xs { padding: 2px 10px; font-size: 12px; border-radius: 6px; }
+        .btn-help {
+            background: var(--gray-200);
+            color: var(--gray-700);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-help:hover { background: var(--gray-300); }
+
+        /* 签到记录列表 */
+        .checkin-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 4px;
+            max-height: 320px;
+        }
+        .checkin-list::-webkit-scrollbar { width: 4px; }
+        .checkin-list::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 8px; }
+        .checkin-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 4px;
+            border-bottom: 1px solid var(--gray-100);
+            border-radius: 8px;
+            transition: 0.2s;
+            gap: 4px;
+        }
+        .checkin-item:hover { background: rgba(238, 242, 255, 0.3); }
+        .checkin-item .info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            flex: 1;
+        }
+        .checkin-item .name { font-weight: 600; color: var(--gray-800); font-size: 14px; }
+        .checkin-item .id {
+            color: var(--gray-400);
+            font-size: 12px;
+            font-family: monospace;
+            background: var(--gray-100);
+            padding: 1px 8px;
+            border-radius: 6px;
+        }
+        .checkin-item .time {
+            color: var(--gray-500);
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.02);
+            padding: 1px 10px;
+            border-radius: 20px;
+        }
+        .checkin-item .mode-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 1px 10px;
+            border-radius: 20px;
+        }
+        .mode-tag.signin { background: #d1fae5; color: #065f46; }
+        .mode-tag.signout { background: #fef3c7; color: #92400e; }
+        .mode-tag.late { background: #fef3c7; color: #92400e; }
+        .mode-tag.absent { background: #fee2e2; color: #991b1b; }
+        .mode-tag.early { background: #fef3c7; color: #92400e; }
+        .checkin-item .actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .checkin-item .del-btn {
+            background: none;
+            border: none;
+            color: var(--gray-400);
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.2s;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .checkin-item .del-btn:hover { color: var(--danger); transform: scale(1.2); }
+        .checkin-item .reprint-btn {
+            background: none;
+            border: 1px solid var(--gray-300);
+            border-radius: 4px;
+            padding: 0 6px;
+            font-size: 12px;
+            cursor: pointer;
+            color: var(--gray-600);
+            transition: 0.2s;
+        }
+        .checkin-item .reprint-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 36px 16px;
+            color: var(--gray-400);
+        }
+        .empty-state .icon { font-size: 44px; margin-bottom: 10px; opacity: 0.5; }
+
+        /* 标签预览 */
+        .label-preview-wrap {
+            display: flex;
+            justify-content: center;
+            margin-top: 12px;
+            padding: 8px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            min-height: 70px;
+            align-items: center;
+            position: relative;
+        }
+        .label-preview-wrap .preview-label {
+            width: 50mm;
+            height: 30mm;
+            padding: 0;
+            box-sizing: border-box;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 2px;
+            display: block;
+            font-family: var(--font);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            transform: scale(0.9);
+            transform-origin: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .preview-label .pl-name, .preview-label .pl-time, .preview-label .pl-mode {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-word;
+            box-sizing: border-box;
+            padding: 1px 2px;
+        }
+        .preview-label .pl-name { font-weight: 700; }
+        .preview-label .pl-time { font-weight: 500; color: #4b5563; }
+        .preview-label .pl-mode { font-weight: 600; }
+
+        /* 通用 */
+        .feedback {
+            font-size: 14px;
+            color: var(--gray-500);
+            margin-top: 8px;
+            min-height: 22px;
+        }
+        .feedback.success { color: var(--success); }
+        .feedback.error { color: var(--danger); }
+        .feedback.warning { color: var(--warning); }
+
+        .footer-copyright {
+            text-align: center;
+            padding: 16px 20px 12px;
+            font-size: 13px;
+            color: var(--gray-400);
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+            letter-spacing: 0.5px;
+        }
+
+        /* 时间段管理 */
+        .time-range-list { margin-top: 10px; }
+        .time-range-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--gray-200);
+            flex-wrap: wrap;
+        }
+        .time-range-item input[type="time"] {
+            padding: 6px 10px;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+        }
+        .time-range-item .del-range-btn {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 6px;
+        }
+        .time-range-item .del-range-btn:hover { transform: scale(1.2); }
+        .add-range-btn { margin-top: 8px; }
+        .range-feedback {
+            font-size: 14px;
+            color: var(--gray-500);
+            margin-top: 6px;
+        }
+        .range-feedback.success { color: var(--success); }
+
+        .threshold-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .threshold-row label {
+            font-weight: 500;
+            color: var(--gray-600);
+        }
+        .threshold-row input[type="number"] {
+            width: 80px;
+            padding: 6px 10px;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .threshold-row input[type="number"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+        }
+        .threshold-row .help-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 帮助弹窗 */
+        .help-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+        }
+        .help-modal.show { display: flex; }
+        .help-modal .help-box {
+            background: #fff;
+            border-radius: var(--radius);
+            padding: 30px 36px;
+            max-width: 520px;
+            width: 90%;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 0.2s ease;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .help-modal .help-box h3 {
+            margin-bottom: 16px;
+            font-size: 20px;
+            color: var(--gray-800);
+        }
+        .help-modal .help-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0;
+        }
+        .help-modal .help-box ul li {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--gray-100);
+            display: flex;
+            gap: 12px;
+        }
+        .help-modal .help-box ul li .status-label {
+            font-weight: 600;
+            min-width: 50px;
+        }
+        .help-modal .help-box .close-help {
+            margin-top: 20px;
+            text-align: right;
+        }
+        .help-modal .help-box .close-help button {
+            padding: 8px 28px;
+            border: none;
+            border-radius: 10px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* ===== 打印容器 ===== */
+        .print-only {
+            position: fixed;
+            left: -9999px;
+            top: -9999px;
+            width: 50mm;
+            height: 30mm;
+            overflow: hidden;
+            z-index: -1;
+            background: #ffffff;
+        }
+        .print-only .label {
+            width: 50mm;
+            height: 30mm;
+            padding: 0;
+            box-sizing: border-box;
+            background: #ffffff;
+            display: block;
+            font-family: var(--font);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .print-only .label .l-name, .print-only .label .l-time, .print-only .label .l-mode {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-word;
+            box-sizing: border-box;
+            padding: 1px 2px;
+        }
+        .print-only .label .l-name { font-weight: 700; }
+        .print-only .label .l-time { font-weight: 500; color: #4b5563; }
+        .print-only .label .l-mode { font-weight: 600; }
+
+        @media print {
+            body * { display: none !important; }
+            body .print-only,
+            body .print-only * { display: flex !important; }
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 50mm !important;
+                height: 30mm !important;
+                overflow: hidden !important;
+                background: #fff !important;
+            }
+            .print-only {
+                position: static !important;
+                left: auto !important;
+                top: auto !important;
+                width: 50mm !important;
+                height: 30mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                z-index: 9999 !important;
+                overflow: hidden !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+                justify-content: center !important;
+                align-items: center !important;
+                background: #fff !important;
+            }
+            .print-only .label {
+                border: none !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                width: 50mm !important;
+                height: 30mm !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                display: block !important;
+                background: #fff !important;
+            }
+            @page {
+                size: 50mm 30mm;
+                margin: 0;
+            }
+        }
+
+        /* 确认弹窗 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(6px);
+            z-index: 9998;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: #fff;
+            border-radius: var(--radius);
+            padding: 28px 32px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-box .actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* 人员管理 */
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .form-group { flex: 1 1 180px; min-width: 130px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-600);
+            margin-bottom: 4px;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 12px;
+            font-size: 14px;
+            transition: 0.2s;
+            background: #fff;
+            color: var(--gray-800);
+            font-family: inherit;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+        }
+        .form-control-sm { padding: 8px 12px; font-size: 13px; }
+
+        .upload-zone {
+            border: 2px dashed var(--gray-300);
+            border-radius: var(--radius);
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(238, 242, 255, 0.5);
+            transform: scale(1.01);
+        }
+        .upload-zone .icon { font-size: 38px; margin-bottom: 8px; opacity: 0.7; }
+        .upload-zone input[type="file"] { display: none; }
+
+        .employee-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 14px;
+            margin-top: 8px;
+        }
+        .employee-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            transition: 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: var(--shadow);
+        }
+        .employee-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+        .employee-card .top {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .employee-card .top .del-btn {
+            background: none;
+            border: none;
+            color: var(--gray-400);
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.2s;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .employee-card .top .del-btn:hover { color: var(--danger); transform: scale(1.2); }
+        .employee-card .ename {
+            font-weight: 600;
+            font-size: 17px;
+            color: var(--gray-800);
+            text-align: center;
+        }
+        .employee-card .eid {
+            text-align: center;
+            color: var(--gray-400);
+            font-size: 13px;
+            font-family: monospace;
+            background: var(--gray-100);
+            padding: 2px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            margin: 0 auto;
+        }
+        .employee-card .egender {
+            text-align: center;
+            font-size: 13px;
+            color: var(--gray-500);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .search-box .form-group { flex: 1 1 240px; min-width: 140px; }
+
+        .flex { display: flex; }
+        .flex-wrap { flex-wrap: wrap; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-8 { gap: 8px; }
+        .gap-12 { gap: 12px; }
+        .gap-16 { gap: 16px; }
+        .mt-8 { margin-top: 8px; }
+        .mt-12 { margin-top: 12px; }
+        .mt-16 { margin-top: 16px; }
+        .mb-8 { margin-bottom: 8px; }
+        .mb-16 { margin-bottom: 16px; }
+        .w-full { width: 100%; }
+        .text-center { text-align: center; }
+        .text-muted { color: var(--gray-400); }
+        .text-sm { font-size: 13px; }
+
+        @media (max-width:768px) {
+            .header { padding: 14px 16px; flex-direction: column; align-items: stretch; gap: 8px; }
+            .brand { font-size: 17px; justify-content: center; }
+            .brand .icon { width: 32px; height: 32px; font-size: 15px; }
+            .header-right { justify-content: center; }
+            .body { padding: 16px; }
+            .card { padding: 16px; }
+            .status-bar { gap: 12px; font-size: 14px; }
+            .mode-badge { font-size: 14px; padding: 3px 12px; }
+            .employee-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+            .label-preview-wrap .preview-label { transform: scale(0.7); }
+            .manual-row { flex-direction: column; }
+            .manual-row .form-group { flex: 1 1 auto; width: 100%; }
+            .time-range-item { flex-direction: column; align-items: stretch; gap: 6px; }
+            .threshold-row { flex-direction: column; align-items: stretch; }
+            .checkin-item .info { gap: 6px; }
+            .checkin-item .name { font-size: 13px; }
+            .checkin-item .id { font-size: 11px; }
+            .checkin-item .time { font-size: 11px; }
+            .checkin-item .mode-tag { font-size: 10px; padding: 1px 6px; }
+        }
+        @media (max-width:480px) {
+            .header { padding: 10px 12px; }
+            .brand { font-size: 15px; }
+            .brand .icon { width: 28px; height: 28px; font-size: 13px; }
+            .body { padding: 10px; }
+            .card { padding: 12px; }
+            .employee-grid { grid-template-columns: 1fr 1fr; }
+            .label-preview-wrap .preview-label { transform: scale(0.6); }
+        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+        /* ============================================================
+           模板编辑器样式（增强独立属性）
+           ============================================================ */
+        .template-editor-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(6px);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .template-editor-modal.show { display: flex; }
+        .template-editor-modal .editor-container {
+            background: #fff;
+            border-radius: var(--radius);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 1200px;
+            height: 92vh;
+            max-height: 820px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: fadeIn 0.25s ease;
+        }
+        .template-editor-modal .editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--gray-200);
+            flex-shrink: 0;
+            background: #fafbfc;
+        }
+        .template-editor-modal .editor-header h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .template-editor-modal .editor-header .close-editor {
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: var(--gray-400);
+            cursor: pointer;
+            transition: 0.2s;
+            padding: 0 8px;
+            line-height: 1;
+        }
+        .template-editor-modal .editor-header .close-editor:hover {
+            color: var(--gray-700);
+            transform: rotate(90deg);
+        }
+        .template-editor-modal .editor-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        /* 左侧画布 */
+        .template-editor-modal .canvas-wrapper {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            background: #f1f3f5;
+            padding: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+        .template-editor-modal .canvas-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+            background: #fff;
+            padding: 10px 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+        .template-editor-modal .canvas-toolbar .zoom-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .template-editor-modal .canvas-toolbar .zoom-group input[type="range"] {
+            width: 120px;
+            accent-color: var(--primary);
+        }
+        .template-editor-modal .canvas-toolbar .zoom-group .zoom-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-600);
+            min-width: 52px;
+        }
+        .template-editor-modal .canvas-toolbar .btn-reset-size {
+            padding: 4px 14px;
+            font-size: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--gray-300);
+            background: #fff;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+        }
+        .template-editor-modal .canvas-toolbar .btn-reset-size:hover { background: var(--gray-100); }
+        .template-editor-modal .canvas-toolbar .btn-reset-size.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+        .template-editor-modal .canvas-toolbar .hint-text {
+            font-size: 12px;
+            color: var(--gray-400);
+            margin-left: auto;
+        }
+        .template-editor-modal .canvas-scroll {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e8eaed;
+            border-radius: 12px;
+            position: relative;
+            min-height: 0;
+        }
+        .template-editor-modal .canvas-scroll .canvas-inner {
+            position: relative;
+            transform-origin: center center;
+            transition: transform 0.08s ease;
+            background: #ffffff;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            border-radius: 2px;
+            border: 1px solid #d1d5db;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        /* 画布上的组件 */
+        .template-editor-modal .canvas-inner .comp {
+            position: absolute;
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font);
+            color: #111827;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1.5px dashed rgba(79, 70, 229, 0.25);
+            border-radius: 2px;
+            transition: border-color 0.15s;
+            overflow: hidden;
+            user-select: none;
+            box-sizing: border-box;
+            padding: 1px 2px;
+            text-align: center;
+            word-break: break-word;
+            line-height: 1.2;
+        }
+        .template-editor-modal .canvas-inner .comp:hover {
+            border-color: rgba(79, 70, 229, 0.5);
+            background: rgba(255, 255, 255, 0.95);
+        }
+        .template-editor-modal .canvas-inner .comp.selected {
+            border-color: var(--primary);
+            border-style: solid;
+            background: rgba(238, 242, 255, 0.7);
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+        }
+        .template-editor-modal .canvas-inner .comp .comp-label {
+            font-size: 10px;
+            position: absolute;
+            top: -16px;
+            left: 2px;
+            color: var(--gray-400);
+            background: rgba(255, 255, 255, 0.85);
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: 500;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .template-editor-modal .canvas-inner .comp .resize-handle {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            width: 12px;
+            height: 12px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: nwse-resize;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .template-editor-modal .canvas-inner .comp.selected .resize-handle {
+            opacity: 1;
+        }
+        .template-editor-modal .canvas-inner .comp .comp-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-weight: 600;
+            color: inherit;
+        }
+        /* 右侧属性面板 */
+        .template-editor-modal .props-panel {
+            flex: 1;
+            min-width: 220px;
+            max-width: 300px;
+            background: #fafbfc;
+            border-left: 1px solid var(--gray-200);
+            padding: 18px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .template-editor-modal .props-panel .prop-group {
+            background: #fff;
+            border-radius: 10px;
+            padding: 14px 16px;
+            border: 1px solid var(--gray-200);
+        }
+        .template-editor-modal .props-panel .prop-group .prop-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray-600);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .template-editor-modal .props-panel .prop-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+        .template-editor-modal .props-panel .prop-row label {
+            font-size: 12px;
+            color: var(--gray-500);
+            min-width: 28px;
+        }
+        .template-editor-modal .props-panel .prop-row input[type="number"],
+        .template-editor-modal .props-panel .prop-row input[type="text"] {
+            width: 52px;
+            padding: 4px 6px;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #fff;
+            color: var(--gray-800);
+            transition: 0.15s;
+        }
+        .template-editor-modal .props-panel .prop-row input[type="number"]:focus,
+        .template-editor-modal .props-panel .prop-row input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .template-editor-modal .props-panel .prop-row input[type="number"] {
+            width: 56px;
+        }
+        .template-editor-modal .props-panel .prop-row input[type="color"] {
+            width: 30px;
+            height: 30px;
+            border: 1px solid var(--gray-300);
+            border-radius: 4px;
+            padding: 0;
+            cursor: pointer;
+            background: none;
+        }
+        .template-editor-modal .props-panel .prop-row .unit {
+            font-size: 11px;
+            color: var(--gray-400);
+        }
+        .template-editor-modal .props-panel .prop-row .prop-btn {
+            padding: 3px 12px;
+            font-size: 11px;
+            border-radius: 6px;
+            border: none;
+            background: var(--primary);
+            color: #fff;
+            cursor: pointer;
+            font-family: inherit;
+            transition: 0.15s;
+        }
+        .template-editor-modal .props-panel .prop-row .prop-btn:hover { background: #4338ca; }
+        .template-editor-modal .props-panel .prop-select {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            background: #fff;
+            color: var(--gray-800);
+        }
+        .template-editor-modal .props-panel .prop-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .template-editor-modal .props-panel .prop-hint {
+            font-size: 11px;
+            color: var(--gray-400);
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .template-editor-modal .props-panel .btn-sync-all {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            background: var(--success);
+            color: #fff;
+            font-weight: 500;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: 0.2s;
+            margin-top: 4px;
+        }
+        .template-editor-modal .props-panel .btn-sync-all:hover { background: #059669; }
+        .template-editor-modal .props-panel .btn-reset-default {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--gray-600);
+            font-weight: 500;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: 0.2s;
+        }
+        .template-editor-modal .props-panel .btn-reset-default:hover { background: var(--gray-100); }
+
+        @media (max-width: 820px) {
+            .template-editor-modal .editor-body {
+                flex-direction: column;
+            }
+            .template-editor-modal .props-panel {
+                max-width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--gray-200);
+                max-height: 280px;
+                min-height: 200px;
+            }
+            .template-editor-modal .canvas-toolbar .hint-text {
+                display: none;
+            }
+            .template-editor-modal .editor-container {
+                height: 96vh;
+                max-height: none;
+            }
+        }
+        @media (max-width: 480px) {
+            .template-editor-modal .canvas-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .template-editor-modal .canvas-toolbar .zoom-group {
+                flex-wrap: wrap;
+            }
+            .template-editor-modal .canvas-toolbar .zoom-group input[type="range"] {
+                width: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== 水印 ===== -->
+    <div class="watermark" id="watermark"></div>
+
+    <!-- ===== Toast ===== -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ===== 帮助弹窗 ===== -->
+    <div class="help-modal" id="helpModal">
+        <div class="help-box">
+            <h3>📌 签到状态判定说明</h3>
+            <p style="color:var(--gray-600);margin-bottom:12px;">系统根据当前时间与签到区间及阈值（默认30分钟）自动判定状态：</p>
+            <ul>
+                <li><span class="status-label">✅ 签到</span> 当前时间在区间开始时间之前</li>
+                <li><span class="status-label">⏰ 迟到</span> 区间开始 ~ 开始+阈值</li>
+                <li><span class="status-label">⚠️ 旷工</span> 开始+阈值 ~ 结束-阈值</li>
+                <li><span class="status-label">🏃 早退</span> 结束-阈值 ~ 结束</li>
+                <li><span class="status-label">🚪 签退</span> 当前时间在区间结束时间之后</li>
+            </ul>
+            <p style="font-size:13px;color:var(--gray-400);margin-top:8px;">* 若有多个区间，将依次匹配，以第一个命中的区间为准。</p>
+            <div class="close-help">
+                <button onclick="document.getElementById('helpModal').classList.remove('show')">我知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 应用 ===== -->
+    <div class="app">
+        <header class="header">
+            <div class="brand">
+                <span class="icon">📋</span>
+                日常签到系统
+                <span class="badge">v4.4</span>
+            </div>
+            <div class="header-right">
+                <span class="header-date">📅 <strong id="todayDate"></strong></span>
+                <button class="btn-toggle-admin" id="toggleAdminBtn">⚙️ 管理</button>
+            </div>
+        </header>
+
+        <div class="body">
+            <!-- 签到面板 -->
+            <section class="panel active" id="panelCheckin">
+                <!-- 状态栏 -->
+                <div class="card">
+                    <div class="card-title">📌 签到状态 <span class="sub">自动判定</span></div>
+                    <div class="status-bar">
+                        <span class="label">当前状态：</span>
+                        <span class="mode-badge" id="currentStatusBadge">签到</span>
+                        <span class="time-hint" id="statusHint">当前时间在区间内 → 签到</span>
+                    </div>
+                </div>
+
+                <!-- 2x2 网格 -->
+                <div class="checkin-grid">
+                    <!-- 左上：摄像头 -->
+                    <div class="grid-item">
+                        <div class="card">
+                            <div class="card-title">📷 扫描条形码 <span class="sub">Code 128</span></div>
+                            <div class="card-body">
+                                <div id="reader"></div>
+                                <div class="scanner-status">
+                                    <span class="dot" id="scannerDot"></span>
+                                    <span id="scannerStatusText">摄像头未启动</span>
+                                </div>
+                                <div class="mt-8">
+                                    <button class="btn btn-outline btn-sm" id="restartScannerBtn">🔄 重启摄像头</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右上：签到记录 -->
+                    <div class="grid-item">
+                        <div class="card">
+                            <div class="card-title">📋 今日签到记录 <span class="sub" id="checkinCountLabel">0 条</span></div>
+                            <div class="card-body">
+                                <div class="checkin-list" id="checkinList">
+                                    <div class="empty-state"><div class="icon">📭</div><div class="text">今日暂无签到记录</div></div>
+                                </div>
+                                <div class="flex gap-8 mt-8 flex-wrap">
+                                    <button class="btn btn-outline btn-sm" id="clearTodayBtn">🗑️ 清空今日记录</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 左下：手动签到 -->
+                    <div class="grid-item">
+                        <div class="card">
+                            <div class="card-title">⌨️ 手动签到</div>
+                            <div class="card-body">
+                                <div class="manual-row">
+                                    <div class="form-group">
+                                        <label>输入学号</label>
+                                        <input type="text" class="form-control" id="manualIdInput" placeholder="例如 S2024001" />
+                                    </div>
+                                    <button class="btn btn-primary" id="manualCheckinBtn">签到</button>
+                                </div>
+                                <div id="manualFeedback" class="feedback"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右下：打印预览 + 模板编辑入口 -->
+                    <div class="grid-item">
+                        <div class="card" id="previewCard">
+                            <div class="card-title">🏷️ 标签预览 <span class="sub" id="previewSub">准备打印</span></div>
+                            <div class="card-body">
+                                <div class="label-preview-wrap">
+                                    <div class="preview-label" id="previewLabel">
+                                        <div class="pl-name" id="previewName">—</div>
+                                        <div class="pl-time" id="previewTime">—</div>
+                                        <div class="pl-mode" id="previewMode">—</div>
+                                    </div>
+                                </div>
+                                <div class="flex gap-12 mt-8 flex-wrap">
+                                    <button class="btn btn-success btn-sm" id="printLabelBtn">🖨️ 立即打印</button>
+                                    <button class="btn btn-outline btn-sm" id="clearPreviewBtn">清除</button>
+                                    <button class="btn btn-primary btn-sm" id="openTemplateEditorBtn">✏️ 模板编辑</button>
+                                    <span style="font-size:12px;color:var(--gray-400);align-self:center;">若未自动打印，请点击此按钮</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 管理面板 -->
+            <section class="panel" id="panelAdmin">
+                <!-- 时间段 + 阈值 -->
+                <div class="card">
+                    <div class="card-title">⏰ 签到时间段与阈值 <span class="sub">多段区间</span></div>
+                    <div class="threshold-row">
+                        <label for="thresholdInput">迟到/早退阈值（分钟）：</label>
+                        <input type="number" id="thresholdInput" min="0" step="1" value="30" />
+                        <button class="btn btn-primary btn-sm" id="saveThresholdBtn">保存</button>
+                        <div class="help-wrapper">
+                            <button class="btn-help" id="helpBtn">?</button>
+                            <span style="font-size:12px;color:var(--gray-400);">点击了解判定规则</span>
+                        </div>
+                    </div>
+                    <div id="thresholdFeedback" class="feedback" style="margin-top:4px;"></div>
+
+                    <div class="time-range-list" id="timeRangeList"></div>
+                    <div class="flex gap-8 mt-8">
+                        <button class="btn btn-outline btn-sm add-range-btn" id="addRangeBtn">➕ 添加时间段</button>
+                        <button class="btn btn-primary btn-sm" id="saveRangesBtn">💾 保存全部</button>
+                    </div>
+                    <div id="rangeFeedback" class="range-feedback"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">➕ 添加人员</div>
+                    <div class="form-row">
+                        <div class="form-group"><label>学号 <span style="color:var(--danger);">*</span></label><input type="text" class="form-control" id="addIdInput" placeholder="输入学号" /></div>
+                        <div class="form-group"><label>姓名 <span style="color:var(--danger);">*</span></label><input type="text" class="form-control" id="addNameInput" placeholder="输入姓名" /></div>
+                        <div class="form-group"><label>性别</label><select class="form-control" id="addGenderInput"><option value="">未设置</option><option value="男">男</option><option value="女">女</option></select></div>
+                        <div class="form-group" style="flex:0 0 auto;"><button class="btn btn-success" id="addEmployeeBtn">添加</button></div>
+                    </div>
+                    <div id="addFeedback" class="feedback"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📤 导入人员 <span class="sub">.xlsx / .xls</span></div>
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="icon">📁</div>
+                        <div class="hint">点击或拖拽上传 Excel 文件（需包含「学号」「姓名」「性别」列）</div>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+                    </div>
+                    <div class="flex justify-between items-center flex-wrap gap-8 mt-8">
+                        <div id="importFeedback" class="feedback" style="margin:0;"></div>
+                        <button class="btn btn-outline btn-sm" id="downloadTemplateBtn">📄 下载模板</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title flex justify-between items-center flex-wrap gap-8">
+                        <span>👥 人员列表 <span class="sub" id="employeeCountLabel">0 人</span></span>
+                        <button class="btn btn-danger btn-sm" id="clearAllEmployeesBtn">🗑️ 删除全部</button>
+                    </div>
+                    <div class="search-box">
+                        <div class="form-group"><label>🔍 搜索</label><input type="text" class="form-control form-control-sm" id="searchEmployeeInput" placeholder="姓名或学号..." /></div>
+                        <button class="btn btn-outline btn-sm" id="clearSearchBtn">清除</button>
+                    </div>
+                    <div id="employeeGridContainer"></div>
+                    <div id="employeeEmpty" class="empty-state" style="display:none;"><div class="icon">👤</div><div class="text">暂无人员，请添加或导入</div></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📦 数据管理</div>
+                    <div class="flex flex-wrap gap-12 items-center">
+                        <button class="btn btn-outline btn-sm" id="exportBackupBtn">💾 导出备份</button>
+                        <button class="btn btn-outline btn-sm" id="importBackupBtn">📂 导入备份</button>
+                        <input type="file" id="backupFileInput" accept=".json" style="display:none;" />
+                        <button class="btn btn-danger btn-sm" id="clearAllDataBtn">🗑️ 清除全部数据</button>
+                        <span class="text-muted text-sm">不可恢复</span>
+                    </div>
+                    <div id="backupFeedback" class="feedback" style="margin-top:8px;"></div>
+                </div>
+            </section>
+        </div>
+
+        <div class="footer-copyright">© 2026 版权归王申彪所有</div>
+    </div>
+
+    <!-- ===== 打印专用容器（无预置“补”字） ===== -->
+    <div class="print-only" id="printContainer">
+        <div class="label" id="printLabel">
+            <div class="l-name" id="printName">—</div>
+            <div class="l-time" id="printTime">—</div>
+            <div class="l-mode" id="printMode">—</div>
+        </div>
+    </div>
+
+    <!-- ===== 确认弹窗 ===== -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal-box">
+            <h3 id="confirmTitle" style="margin-bottom:8px;font-size:18px;color:var(--gray-800);">确认操作</h3>
+            <p id="confirmMessage" style="color:var(--gray-600);margin-bottom:20px;font-size:15px;">确定要执行此操作吗？</p>
+            <div class="actions">
+                <button class="btn btn-outline" id="confirmCancel">取消</button>
+                <button class="btn btn-danger" id="confirmOk">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    模板编辑器模态框（增强独立属性）
+    ============================================================ -->
+    <div class="template-editor-modal" id="templateEditorModal">
+        <div class="editor-container">
+            <!-- 头部 -->
+            <div class="editor-header">
+                <h2>✏️ 模板编辑器 <span style="font-size:13px;font-weight:400;color:var(--gray-400);">拖拽移动 · 拖拽右下角缩放</span></h2>
+                <button class="close-editor" id="closeTemplateEditor">✕</button>
+            </div>
+            <!-- 主体 -->
+            <div class="editor-body">
+                <!-- 左侧画布 -->
+                <div class="canvas-wrapper">
+                    <div class="canvas-toolbar">
+                        <div class="zoom-group">
+                            <span style="font-size:13px;font-weight:500;color:var(--gray-600);">🔍</span>
+                            <input type="range" id="zoomSlider" min="0.2" max="3.0" step="0.05" value="1.0" />
+                            <span class="zoom-label" id="zoomLabel">100%</span>
+                        </div>
+                        <button class="btn-reset-size active" id="btnActualSize">📐 实际尺寸</button>
+                        <span class="hint-text">滚轮缩放 · 拖动组件 · 手柄调大小</span>
+                    </div>
+                    <div class="canvas-scroll" id="canvasScroll">
+                        <div class="canvas-inner" id="canvasInner">
+                            <!-- 三个组件由 JS 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                <!-- 右侧属性面板（增强） -->
+                <div class="props-panel" id="propsPanel">
+                    <!-- 标签尺寸 -->
+                    <div class="prop-group">
+                        <div class="prop-title">📐 标签尺寸</div>
+                        <div class="prop-row">
+                            <label>宽</label>
+                            <input type="number" id="propLabelWidth" value="50" step="1" min="30" max="80" />
+                            <span class="unit">mm</span>
+                            <label style="margin-left:8px;">高</label>
+                            <input type="number" id="propLabelHeight" value="30" step="1" min="20" max="50" />
+                            <span class="unit">mm</span>
+                            <button class="prop-btn" id="propSyncLabelSize">同步</button>
+                        </div>
+                    </div>
+                    <!-- 当前组件（增强：独立字体大小、颜色、加粗） -->
+                    <div class="prop-group">
+                        <div class="prop-title">🎯 当前组件</div>
+                        <select class="prop-select" id="propCompSelect">
+                            <option value="name">姓名</option>
+                            <option value="time">时间</option>
+                            <option value="mode">状态</option>
+                        </select>
+                        <div class="prop-row" style="margin-top:8px;">
+                            <label>左</label>
+                            <input type="number" id="propCompLeft" step="0.5" min="0" />
+                            <span class="unit">mm</span>
+                            <label>上</label>
+                            <input type="number" id="propCompTop" step="0.5" min="0" />
+                            <span class="unit">mm</span>
+                            <label>宽</label>
+                            <input type="number" id="propCompWidth" step="0.5" min="5" />
+                            <span class="unit">mm</span>
+                            <label>高</label>
+                            <input type="number" id="propCompHeight" step="0.5" min="5" />
+                            <span class="unit">mm</span>
+                            <button class="prop-btn" id="propSyncComp">同步</button>
+                        </div>
+                        <div class="prop-row">
+                            <label>字号</label>
+                            <input type="number" id="propCompFontSize" step="0.5" min="4" max="36" value="12" />
+                            <span class="unit">pt</span>
+                            <label>颜色</label>
+                            <input type="color" id="propCompColor" value="#111827" />
+                            <label style="margin-left:4px;">加粗</label>
+                            <input type="checkbox" id="propCompBold" checked />
+                        </div>
+                        <div class="prop-hint">选中画布组件或下拉选择，修改后点击「同步」</div>
+                    </div>
+                    <!-- 操作按钮 -->
+                    <div>
+                        <button class="btn-sync-all" id="propSaveAll">💾 保存模板并关闭</button>
+                        <button class="btn-reset-default" id="propResetDefault" style="margin-top:8px;">↩️ 恢复默认布局</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            // 水印
+            // ============================================================
+            function updateWatermark() {
+                const now = new Date();
+                const timeStr = now.toLocaleString('zh-CN', { hour12: false });
+                const el = document.getElementById('watermark');
+                let html = '';
+                for (let i = 0; i < 30; i++) {
+                    html += `<div class="wm-item"><span class="wm-line1">内部使用</span><span class="wm-line2">${timeStr}</span></div>`;
+                }
+                el.innerHTML = html;
+            }
+            updateWatermark();
+            setInterval(updateWatermark, 1000);
+
+            // ============================================================
+            // 工具 & 数据
+            // ============================================================
+            const todayStr = () => new Date().toISOString().slice(0, 10);
+            const fmtTime = (ts) => new Date(ts).toLocaleString('zh-CN', { hour12: false });
+            const fmtShort = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const isToday = (ts) => new Date(ts).toISOString().slice(0, 10) === todayStr();
+            const getTodayRecords = (records) => records.filter(r => isToday(r.timestamp));
+
+            function getTimeRanges() {
+                try {
+                    const val = localStorage.getItem('time_ranges');
+                    return val ? JSON.parse(val) : [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }];
+                } catch { return [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }]; }
+            }
+            function setTimeRanges(ranges) {
+                localStorage.setItem('time_ranges', JSON.stringify(ranges));
+            }
+
+            function getThreshold() {
+                try {
+                    const val = localStorage.getItem('threshold_minutes');
+                    return val ? parseInt(val, 10) : 30;
+                } catch { return 30; }
+            }
+            function setThreshold(val) {
+                localStorage.setItem('threshold_minutes', String(val));
+            }
+
+            function getCurrentStatus() {
+                const now = new Date();
+                const h = now.getHours(),
+                    m = now.getMinutes();
+                const currentMinutes = h * 60 + m;
+                const ranges = getTimeRanges();
+                const threshold = getThreshold();
+
+                for (let r of ranges) {
+                    const [sh, sm] = r.start.split(':').map(Number);
+                    const [eh, em] = r.end.split(':').map(Number);
+                    const startMin = sh * 60 + sm;
+                    const endMin = eh * 60 + em;
+
+                    if (currentMinutes >= startMin && currentMinutes <= endMin) {
+                        const lateStart = startMin + threshold;
+                        const earlyEnd = endMin - threshold;
+                        if (currentMinutes <= lateStart) return 'late';
+                        else if (currentMinutes >= earlyEnd) return 'early';
+                        else return 'absent';
+                    }
+                    if (currentMinutes < startMin) return 'signin';
+                }
+                return 'signout';
+            }
+
+            function getStatusDisplay(status) {
+                const map = {
+                    'signin': '签到',
+                    'signout': '签退',
+                    'late': '迟到',
+                    'absent': '旷工',
+                    'early': '早退'
+                };
+                return map[status] || status;
+            }
+
+            function getStatusCSS(status) {
+                return 'status-' + status;
+            }
+
+            function updateStatusUI() {
+                const status = getCurrentStatus();
+                const badge = document.getElementById('currentStatusBadge');
+                const hint = document.getElementById('statusHint');
+                badge.textContent = getStatusDisplay(status);
+                badge.className = 'mode-badge ' + getStatusCSS(status);
+                const now = new Date();
+                const nowStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                const ranges = getTimeRanges();
+                const threshold = getThreshold();
+                if (status === 'signin') {
+                    hint.textContent = `当前时间 ${nowStr} 在第一个区间开始之前 → 签到`;
+                } else if (status === 'signout') {
+                    hint.textContent = `当前时间 ${nowStr} 不在任何区间内 → 签退`;
+                } else if (status === 'late') {
+                    hint.textContent = `当前时间 ${nowStr} 在区间开始后 ${threshold} 分钟内 → 迟到`;
+                } else if (status === 'absent') {
+                    hint.textContent = `当前时间 ${nowStr} 在区间中间段 → 旷工`;
+                } else if (status === 'early') {
+                    hint.textContent = `当前时间 ${nowStr} 在区间结束前 ${threshold} 分钟内 → 早退`;
+                }
+            }
+
+            const DB = {
+                getEmployees() { try { return JSON.parse(localStorage.getItem('daily_employees')) || []; } catch { return []; } },
+                setEmployees(d) { localStorage.setItem('daily_employees', JSON.stringify(d)); },
+                getRecords() { try { return JSON.parse(localStorage.getItem('daily_records')) || []; } catch { return []; } },
+                setRecords(d) { localStorage.setItem('daily_records', JSON.stringify(d)); },
+                clearAll() { this.setEmployees([]); this.setRecords([]); }
+            };
+
+            let pendingPrintData = null;
+            let isReprint = false;
+
+            // ============================================================
+            // Toast
+            // ============================================================
+            let _lastToast = '',
+                _lastToastTime = 0;
+
+            function showToast(msg, type = 'info') {
+                const now = Date.now();
+                if (msg === _lastToast && now - _lastToastTime < 3000) return;
+                _lastToast = msg;
+                _lastToastTime = now;
+                const c = document.getElementById('toastContainer');
+                const t = document.createElement('div');
+                t.className = `toast ${type}`;
+                const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+                t.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${msg}</span><button class="close">&times;</button>`;
+                t.querySelector('.close').onclick = () => t.remove();
+                c.appendChild(t);
+                setTimeout(() => { if (t.parentNode) t.remove(); }, 4000);
+            }
+
+            // ============================================================
+            // 确认弹窗
+            // ============================================================
+            let confirmResolve = null;
+
+            function showConfirm(title, msg) {
+                return new Promise((resolve) => {
+                    document.getElementById('confirmTitle').textContent = title;
+                    document.getElementById('confirmMessage').textContent = msg;
+                    document.getElementById('confirmModal').classList.add('show');
+                    confirmResolve = resolve;
+                });
+            }
+            document.getElementById('confirmCancel').onclick = () => {
+                document.getElementById('confirmModal').classList.remove('show');
+                if (confirmResolve) { confirmResolve(false);
+                    confirmResolve = null; }
+            };
+            document.getElementById('confirmOk').onclick = () => {
+                document.getElementById('confirmModal').classList.remove('show');
+                if (confirmResolve) { confirmResolve(true);
+                    confirmResolve = null; }
+            };
+            document.getElementById('confirmModal').onclick = (e) => {
+                if (e.target === e.currentTarget) {
+                    document.getElementById('confirmModal').classList.remove('show');
+                    if (confirmResolve) { confirmResolve(false);
+                        confirmResolve = null; }
+                }
+            };
+
+            // ============================================================
+            // 摄像头
+            // ============================================================
+            let qr = null,
+                scanning = false;
+
+            function initScanner() {
+                const dot = document.getElementById('scannerDot'),
+                    status = document.getElementById('scannerStatusText');
+                if (qr) {
+                    try { qr.stop().then(() => { qr.clear();
+                            qr = null;
+                            scanning = false;
+                            dot.classList.remove('active');
+                            status.textContent = '摄像头已停止'; }).catch(() => {}); } catch (e) {}
+                }
+                try {
+                    qr = new Html5Qrcode("reader");
+                    qr.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 200 },
+                            aspectRatio: 1.0 },
+                        (decoded) => {
+                            const id = decoded.trim().toUpperCase();
+                            handleScan(id);
+                        },
+                        () => {}
+                    ).then(() => {
+                        scanning = true;
+                        dot.classList.add('active');
+                        status.textContent = '摄像头已启动，扫描中...';
+                        document.getElementById('reader').classList.add('scan-active');
+                    }).catch(() => {
+                        scanning = false;
+                        dot.classList.remove('active');
+                        status.textContent = '⚠️ 无法访问摄像头';
+                        showToast('无法访问摄像头，请检查权限', 'error');
+                    });
+                } catch (e) {
+                    scanning = false;
+                    dot.classList.remove('active');
+                    status.textContent = '⚠️ 浏览器不支持摄像头';
+                    showToast('当前浏览器不支持摄像头', 'error');
+                }
+            }
+
+            function stopScanner() {
+                if (qr && scanning) {
+                    try { qr.stop().then(() => { qr.clear();
+                            scanning = false;
+                            document.getElementById('scannerDot').classList.remove('active');
+                            document.getElementById('scannerStatusText').textContent = '摄像头已停止';
+                            document.getElementById('reader').classList.remove('scan-active'); }).catch(() => {}); } catch (
+                        e) {}
+                }
+            }
+
+            document.getElementById('restartScannerBtn').onclick = function() {
+                stopScanner();
+                setTimeout(initScanner, 300);
+                showToast('正在重启摄像头...', 'info');
+            };
+
+            // ============================================================
+            // 核心签到
+            // ============================================================
+            function handleScan(id) {
+                const emps = DB.getEmployees();
+                const emp = emps.find(e => e.id === id);
+                if (!emp) {
+                    showToast(`❌ 未找到学号: ${id}`, 'error');
+                    if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+                    return;
+                }
+
+                const status = getCurrentStatus();
+                const statusDisplay = getStatusDisplay(status);
+
+                const records = DB.getRecords();
+                const todayRecords = getTodayRecords(records);
+                const already = todayRecords.some(r => r.employeeId === id && r.status === status);
+                if (already) {
+                    showToast(`⚠️ 「${emp.name}」今日已记录为「${statusDisplay}」`, 'warning');
+                    if (navigator.vibrate) navigator.vibrate(30);
+                    return;
+                }
+
+                const record = {
+                    employeeId: id,
+                    name: emp.name,
+                    gender: emp.gender || '',
+                    status: status,
+                    statusDisplay: statusDisplay,
+                    timestamp: Date.now(),
+                    date: todayStr()
+                };
+                records.push(record);
+                DB.setRecords(records);
+                if (navigator.vibrate) navigator.vibrate(30);
+
+                showToast(`✅ 「${emp.name}」${statusDisplay}成功！`, 'success');
+
+                fillPrintLabel(emp.name, record.timestamp, statusDisplay, false);
+                renderAll();
+
+                setTimeout(() => {
+                    try {
+                        window.print();
+                        showToast('🖨️ 已发送打印任务', 'success');
+                    } catch (e) {
+                        showToast('请点击“立即打印”按钮', 'warning');
+                    }
+                }, 500);
+            }
+
+            // ============================================================
+            // 模板配置管理（增强：每个组件独立字体大小、颜色、加粗）
+            // ============================================================
+            function getDefaultTemplateConfig() {
+                return {
+                    labelWidth: 50,
+                    labelHeight: 30,
+                    components: {
+                        name: { left: 2, top: 2, width: 46, height: 11, fontSize: 16, color: '#111827', bold: true },
+                        time: { left: 2, top: 14, width: 46, height: 7, fontSize: 10, color: '#4b5563', bold: false },
+                        mode: { left: 2, top: 22, width: 46, height: 6, fontSize: 10, color: '#111827', bold: true }
+                    }
+                };
+            }
+
+            function getTemplateConfig() {
+                try {
+                    const val = localStorage.getItem('label_template_config');
+                    if (val) {
+                        const parsed = JSON.parse(val);
+                        const def = getDefaultTemplateConfig();
+                        if (!parsed.components) parsed.components = def.components;
+                        compTypes.forEach(type => {
+                            if (!parsed.components[type]) parsed.components[type] = def.components[type];
+                            // 保证新属性存在
+                            if (parsed.components[type].fontSize === undefined) parsed.components[type].fontSize = def
+                                .components[type].fontSize;
+                            if (parsed.components[type].color === undefined) parsed.components[type].color = def
+                                .components[type].color;
+                            if (parsed.components[type].bold === undefined) parsed.components[type].bold = def
+                                .components[type].bold;
+                        });
+                        if (!parsed.labelWidth) parsed.labelWidth = def.labelWidth;
+                        if (!parsed.labelHeight) parsed.labelHeight = def.labelHeight;
+                        return parsed;
+                    }
+                } catch (e) {}
+                return getDefaultTemplateConfig();
+            }
+
+            function setTemplateConfig(config) {
+                localStorage.setItem('label_template_config', JSON.stringify(config));
+            }
+
+            const compTypes = ['name', 'time', 'mode'];
+            const compLabels = { name: '姓名', time: '时间', mode: '状态' };
+            const compSampleText = {
+                name: '张三',
+                time: '08:30:25',
+                mode: '签到'
+            };
+
+            // ============================================================
+            // 应用模板样式到打印和预览（增强）
+            // ============================================================
+            function applyTemplateToElement(element, compType, config) {
+                if (!element) return;
+                const comp = config.components[compType];
+                if (!comp) return;
+                element.style.position = 'absolute';
+                element.style.left = comp.left + 'mm';
+                element.style.top = comp.top + 'mm';
+                element.style.width = comp.width + 'mm';
+                element.style.height = comp.height + 'mm';
+                const fs = comp.fontSize || 10;
+                element.style.fontSize = fs + 'pt';
+                element.style.color = comp.color || '#111827';
+                element.style.fontWeight = comp.bold ? '700' : '400';
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
+                element.style.justifyContent = 'center';
+                element.style.overflow = 'hidden';
+                element.style.textAlign = 'center';
+                element.style.lineHeight = '1.2';
+                element.style.wordBreak = 'break-word';
+                element.style.boxSizing = 'border-box';
+                element.style.padding = '1px 2px';
+            }
+
+            function applyTemplateToLabel() {
+                const config = getTemplateConfig();
+                const printLabel = document.getElementById('printLabel');
+                const previewLabel = document.getElementById('previewLabel');
+
+                if (printLabel) {
+                    printLabel.style.width = config.labelWidth + 'mm';
+                    printLabel.style.height = config.labelHeight + 'mm';
+                    printLabel.style.position = 'relative';
+                    printLabel.style.overflow = 'hidden';
+                    printLabel.style.boxSizing = 'border-box';
+                    printLabel.style.padding = '0';
+                    printLabel.style.display = 'block';
+                }
+                if (previewLabel) {
+                    previewLabel.style.width = config.labelWidth + 'mm';
+                    previewLabel.style.height = config.labelHeight + 'mm';
+                    previewLabel.style.position = 'relative';
+                    previewLabel.style.overflow = 'hidden';
+                    previewLabel.style.boxSizing = 'border-box';
+                    previewLabel.style.padding = '0';
+                    previewLabel.style.display = 'block';
+                    previewLabel.style.transform = 'scale(0.9)';
+                    previewLabel.style.transformOrigin = 'center';
+                }
+
+                const printName = document.getElementById('printName');
+                const printTime = document.getElementById('printTime');
+                const printMode = document.getElementById('printMode');
+                const previewName = document.getElementById('previewName');
+                const previewTime = document.getElementById('previewTime');
+                const previewMode = document.getElementById('previewMode');
+
+                [printName, printTime, printMode, previewName, previewTime, previewMode].forEach(el => {
+                    if (el) {
+                        el.style.position = '';
+                        el.style.left = '';
+                        el.style.top = '';
+                        el.style.width = '';
+                        el.style.height = '';
+                        el.style.fontSize = '';
+                        el.style.color = '';
+                        el.style.fontWeight = '';
+                        el.style.display = '';
+                        el.style.alignItems = '';
+                        el.style.justifyContent = '';
+                        el.style.overflow = '';
+                        el.style.textAlign = '';
+                        el.style.lineHeight = '';
+                        el.style.wordBreak = '';
+                        el.style.boxSizing = '';
+                        el.style.padding = '';
+                    }
+                });
+
+                applyTemplateToElement(printName, 'name', config);
+                applyTemplateToElement(printTime, 'time', config);
+                applyTemplateToElement(printMode, 'mode', config);
+                applyTemplateToElement(previewName, 'name', config);
+                applyTemplateToElement(previewTime, 'time', config);
+                applyTemplateToElement(previewMode, 'mode', config);
+            }
+
+            // ============================================================
+            // 填充打印和预览
+            // ============================================================
+            function fillPrintLabel(name, timestamp, statusDisplay, reprint = false) {
+                const timeStr = fmtTime(timestamp);
+
+                document.getElementById('printName').textContent = name;
+                document.getElementById('printTime').textContent = timeStr;
+                document.getElementById('printMode').textContent = statusDisplay;
+
+                const printLabel = document.getElementById('printLabel');
+                const oldBadge = printLabel.querySelector('.reprint-badge');
+                if (oldBadge) oldBadge.remove();
+                if (reprint) {
+                    const badge = document.createElement('span');
+                    badge.className = 'reprint-badge';
+                    badge.textContent = '补';
+                    badge.style.cssText =
+                        'position:absolute;top:1mm;left:2mm;font-size:14pt;font-weight:700;color:#ef4444;z-index:5;';
+                    printLabel.prepend(badge);
+                }
+
+                document.getElementById('previewName').textContent = name;
+                document.getElementById('previewTime').textContent = timeStr;
+                document.getElementById('previewMode').textContent = statusDisplay;
+                const previewLabel = document.getElementById('previewLabel');
+                const oldPreviewBadge = previewLabel.querySelector('.reprint-badge');
+                if (oldPreviewBadge) oldPreviewBadge.remove();
+                if (reprint) {
+                    const badge = document.createElement('span');
+                    badge.className = 'reprint-badge';
+                    badge.textContent = '补';
+                    badge.style.cssText =
+                        'position:absolute;top:1px;left:2px;font-size:12px;font-weight:700;color:#ef4444;z-index:5;';
+                    previewLabel.prepend(badge);
+                }
+
+                document.getElementById('previewSub').textContent = reprint ? '补打印·已就绪' : `已就绪 · ${statusDisplay}`;
+                applyTemplateToLabel();
+
+                pendingPrintData = { name, timestamp, status: statusDisplay, reprint: reprint };
+                isReprint = reprint;
+            }
+
+            // ============================================================
+            // 补打印
+            // ============================================================
+            function reprintRecord(timestamp) {
+                const records = DB.getRecords();
+                const record = records.find(r => r.timestamp === timestamp);
+                if (!record) {
+                    showToast('未找到该记录', 'error');
+                    return;
+                }
+                const name = record.name;
+                const statusDisplay = record.statusDisplay || getStatusDisplay(record.status);
+                fillPrintLabel(name, record.timestamp, statusDisplay, true);
+                setTimeout(() => {
+                    try {
+                        window.print();
+                        showToast('🖨️ 补打印标签已发送', 'success');
+                    } catch (e) {
+                        showToast('请点击“立即打印”按钮', 'warning');
+                    }
+                }, 300);
+            }
+
+            // ============================================================
+            // 手动签到
+            // ============================================================
+            document.getElementById('manualCheckinBtn').addEventListener('click', function() {
+                const id = document.getElementById('manualIdInput').value.trim().toUpperCase();
+                if (!id) { showToast('请输入学号', 'warning'); return; }
+                handleScan(id);
+                document.getElementById('manualIdInput').value = '';
+            });
+            document.getElementById('manualIdInput').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') document.getElementById('manualCheckinBtn').click();
+            });
+
+            // ============================================================
+            // 打印按钮
+            // ============================================================
+            document.getElementById('printLabelBtn').addEventListener('click', function() {
+                if (!pendingPrintData) {
+                    showToast('没有可打印的标签', 'warning');
+                    return;
+                }
+                try {
+                    window.print();
+                    showToast('🖨️ 正在打印...', 'success');
+                } catch (e) {
+                    showToast('打印失败: ' + e.message, 'error');
+                }
+            });
+
+            document.getElementById('clearPreviewBtn').addEventListener('click', function() {
+                document.getElementById('previewName').textContent = '—';
+                document.getElementById('previewTime').textContent = '—';
+                document.getElementById('previewMode').textContent = '—';
+                const previewLabel = document.getElementById('previewLabel');
+                const oldBadge = previewLabel.querySelector('.reprint-badge');
+                if (oldBadge) oldBadge.remove();
+                document.getElementById('previewSub').textContent = '准备打印';
+                pendingPrintData = null;
+                isReprint = false;
+                document.getElementById('printName').textContent = '—';
+                document.getElementById('printTime').textContent = '—';
+                document.getElementById('printMode').textContent = '—';
+                const printLabel = document.getElementById('printLabel');
+                const oldPrintBadge = printLabel.querySelector('.reprint-badge');
+                if (oldPrintBadge) oldPrintBadge.remove();
+                applyTemplateToLabel();
+            });
+
+            // ============================================================
+            // 阈值设置
+            // ============================================================
+            document.getElementById('saveThresholdBtn').addEventListener('click', function() {
+                const val = parseInt(document.getElementById('thresholdInput').value, 10);
+                if (isNaN(val) || val < 0) {
+                    showToast('请输入有效的正整数', 'warning');
+                    return;
+                }
+                setThreshold(val);
+                document.getElementById('thresholdFeedback').textContent = `✅ 阈值已更新为 ${val} 分钟`;
+                document.getElementById('thresholdFeedback').className = 'feedback success';
+                updateStatusUI();
+                showToast(`阈值已设为 ${val} 分钟`, 'success');
+            });
+
+            // ============================================================
+            // 帮助按钮
+            // ============================================================
+            document.getElementById('helpBtn').addEventListener('click', function() {
+                document.getElementById('helpModal').classList.add('show');
+            });
+            document.getElementById('helpModal').addEventListener('click', function(e) {
+                if (e.target === this) this.classList.remove('show');
+            });
+
+            // ============================================================
+            // 时间段管理
+            // ============================================================
+            function renderTimeRanges() {
+                const ranges = getTimeRanges();
+                const list = document.getElementById('timeRangeList');
+                if (ranges.length === 0) {
+                    list.innerHTML = '<div class="text-muted" style="padding:8px 0;">暂无时间段，请添加。</div>';
+                    return;
+                }
+                let html = '';
+                ranges.forEach((r, index) => {
+                    html += `
+                            <div class="time-range-item" data-index="${index}">
+                                <input type="time" value="${r.start}" class="range-start" />
+                                <span>至</span>
+                                <input type="time" value="${r.end}" class="range-end" />
+                                <button class="del-range-btn" data-index="${index}">✕</button>
+                            </div>
+                        `;
+                });
+                list.innerHTML = html;
+
+                list.querySelectorAll('.del-range-btn').forEach(btn => {
+                    btn.onclick = function() {
+                        const idx = parseInt(this.dataset.index);
+                        const ranges = getTimeRanges();
+                        ranges.splice(idx, 1);
+                        setTimeRanges(ranges);
+                        renderTimeRanges();
+                        updateStatusUI();
+                        showToast('已删除时间段', 'info');
+                    };
+                });
+            }
+
+            document.getElementById('addRangeBtn').addEventListener('click', function() {
+                const ranges = getTimeRanges();
+                ranges.push({ start: '09:00', end: '18:00' });
+                setTimeRanges(ranges);
+                renderTimeRanges();
+                updateStatusUI();
+                showToast('已添加新时间段，请修改时间', 'info');
+            });
+
+            document.getElementById('saveRangesBtn').addEventListener('click', function() {
+                const items = document.querySelectorAll('.time-range-item');
+                const newRanges = [];
+                let valid = true;
+                items.forEach(item => {
+                    const start = item.querySelector('.range-start').value;
+                    const end = item.querySelector('.range-end').value;
+                    if (start && end) {
+                        if (start >= end) {
+                            showToast(`开始时间 ${start} 不能晚于结束时间 ${end}`, 'warning');
+                            valid = false;
+                            return;
+                        }
+                        newRanges.push({ start, end });
+                    }
+                });
+                if (!valid) return;
+                setTimeRanges(newRanges);
+                renderTimeRanges();
+                updateStatusUI();
+                document.getElementById('rangeFeedback').textContent = '✅ 时间段已保存';
+                document.getElementById('rangeFeedback').className = 'range-feedback success';
+                showToast('时间段保存成功', 'success');
+            });
+
+            // ============================================================
+            // 渲染
+            // ============================================================
+            function renderCheckinList() {
+                const records = DB.getRecords();
+                const today = getTodayRecords(records);
+                document.getElementById('checkinCountLabel').textContent = `${today.length} 条`;
+                const container = document.getElementById('checkinList');
+                if (!today.length) {
+                    container.innerHTML =
+                        '<div class="empty-state"><div class="icon">📭</div><div class="text">今日暂无签到记录</div></div>';
+                    return;
+                }
+                const sorted = [...today].sort((a, b) => b.timestamp - a.timestamp);
+                container.innerHTML = sorted.map((r) => {
+                    const displayStatus = r.statusDisplay || getStatusDisplay(r.status);
+                    const cls = r.status || 'signin';
+                    return `
+                            <div class="checkin-item">
+                                <div class="info">
+                                    <span class="name">${r.name}</span>
+                                    <span class="id">${r.employeeId}</span>
+                                    <span class="mode-tag ${cls}">${displayStatus}</span>
+                                    <span class="time">${fmtShort(r.timestamp)}</span>
+                                </div>
+                                <div class="actions">
+                                    <button class="reprint-btn" data-timestamp="${r.timestamp}" title="补打印">补</button>
+                                    <button class="del-btn delete-record" data-timestamp="${r.timestamp}">✕</button>
+                                </div>
+                            </div>
+                        `;
+                }).join('');
+
+                container.querySelectorAll('.reprint-btn').forEach(btn => {
+                    btn.onclick = function(e) {
+                        e.stopPropagation();
+                        const ts = parseInt(this.dataset.timestamp);
+                        reprintRecord(ts);
+                    };
+                });
+
+                container.querySelectorAll('.delete-record').forEach(b => {
+                    b.onclick = async function(e) {
+                        e.stopPropagation();
+                        const ts = parseInt(this.dataset.timestamp);
+                        const record = DB.getRecords().find(r => r.timestamp === ts);
+                        if (!record) return;
+                        if (await showConfirm('删除记录', `确定要删除「${record.name}」的签到记录吗？`)) {
+                            DB.setRecords(DB.getRecords().filter(r => r.timestamp !== ts));
+                            renderAll();
+                            showToast('已删除该记录', 'success');
+                        }
+                    };
+                });
+            }
+
+            function renderEmployees(search) {
+                const emps = DB.getEmployees();
+                let filtered = emps;
+                if (search && search.trim()) {
+                    const s = search.trim().toLowerCase();
+                    filtered = filtered.filter(e => e.name.toLowerCase().includes(s) || e.id.toLowerCase().includes(s));
+                }
+                document.getElementById('employeeCountLabel').textContent = `${filtered.length} 人`;
+                const container = document.getElementById('employeeGridContainer');
+                const empty = document.getElementById('employeeEmpty');
+                if (!filtered.length) {
+                    container.innerHTML = '';
+                    empty.style.display = 'block';
+                    empty.querySelector('.text').textContent = emps.length ? '未找到匹配的人员' : '暂无人员，请添加或导入';
+                    return;
+                }
+                empty.style.display = 'none';
+                let html = '<div class="employee-grid">';
+                filtered.forEach(emp => {
+                    const genderDisplay = emp.gender || '未设置';
+                    html += `
+                            <div class="employee-card">
+                                <div class="top"><button class="del-btn delete-employee" data-id="${emp.id}">✕</button></div>
+                                <div class="ename">${emp.name}</div>
+                                <div class="eid">${emp.id}</div>
+                                <div class="egender">${genderDisplay}</div>
+                            </div>
+                        `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                container.querySelectorAll('.delete-employee').forEach(b => {
+                    b.onclick = async function() {
+                        const id = this.dataset.id;
+                        const emp = DB.getEmployees().find(e => e.id === id);
+                        if (!emp) return;
+                        if (await showConfirm('删除人员', `确定要删除「${emp.name}」(学号: ${id}) 吗？`)) {
+                            DB.setEmployees(DB.getEmployees().filter(e => e.id !== id));
+                            renderAll();
+                            showToast(`已删除「${emp.name}」`, 'success');
+                        }
+                    };
+                });
+            }
+
+            function renderAll() {
+                const search = document.getElementById('searchEmployeeInput').value;
+                renderEmployees(search);
+                renderCheckinList();
+                document.getElementById('todayDate').textContent = new Date().toLocaleDateString('zh-CN', { year: 'numeric',
+                    month: 'long', day: 'numeric', weekday: 'short' });
+                updateStatusUI();
+                renderTimeRanges();
+                document.getElementById('thresholdInput').value = getThreshold();
+                document.getElementById('thresholdFeedback').textContent = '';
+                document.getElementById('thresholdFeedback').className = 'feedback';
+                applyTemplateToLabel();
+            }
+
+            // ============================================================
+            // 人员管理
+            // ============================================================
+            document.getElementById('addEmployeeBtn').addEventListener('click', function() {
+                const id = document.getElementById('addIdInput').value.trim().toUpperCase();
+                const name = document.getElementById('addNameInput').value.trim();
+                const gender = document.getElementById('addGenderInput').value;
+                if (!id) { showToast('请输入学号', 'warning'); return; }
+                if (!name) { showToast('请输入姓名', 'warning'); return; }
+                const emps = DB.getEmployees();
+                if (emps.some(e => e.id === id)) { showToast(`学号 "${id}" 已存在`, 'warning'); return; }
+                emps.push({ id, name, gender });
+                DB.setEmployees(emps);
+                renderAll();
+                document.getElementById('addIdInput').value = '';
+                document.getElementById('addNameInput').value = '';
+                document.getElementById('addGenderInput').value = '';
+                showToast(`✅ 已添加「${name}」(学号: ${id})`, 'success');
+            });
+            ['addIdInput', 'addNameInput'].forEach(id => {
+                document.getElementById(id).addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') document.getElementById('addEmployeeBtn').click();
+                });
+            });
+
+            document.getElementById('searchEmployeeInput').addEventListener('input', function() { renderAll(); });
+            document.getElementById('clearSearchBtn').addEventListener('click', function() {
+                document.getElementById('searchEmployeeInput').value = '';
+                renderAll();
+            });
+
+            document.getElementById('clearTodayBtn').addEventListener('click', async function() {
+                const today = getTodayRecords(DB.getRecords());
+                if (!today.length) { showToast('今日暂无记录', 'warning'); return; }
+                if (await showConfirm('清空今日记录', `确定要删除今日全部 ${today.length} 条签到记录吗？`)) {
+                    const all = DB.getRecords();
+                    DB.setRecords(all.filter(r => !isToday(r.timestamp)));
+                    renderAll();
+                    showToast('已清空今日记录', 'success');
+                }
+            });
+
+            document.getElementById('clearAllEmployeesBtn').addEventListener('click', async function() {
+                if (DB.getEmployees().length === 0) { showToast('暂无人员', 'warning'); return; }
+                if (await showConfirm('删除全部人员', '确定要删除所有人员吗？签到记录将保留。')) {
+                    DB.setEmployees([]);
+                    renderAll();
+                    showToast('已删除全部人员', 'info');
+                }
+            });
+
+            document.getElementById('clearAllDataBtn').addEventListener('click', async function() {
+                if (await showConfirm('清除全部数据', '确定要清除所有人员和签到数据吗？此操作不可恢复！')) {
+                    DB.clearAll();
+                    renderAll();
+                    showToast('已清除全部数据', 'info');
+                    document.getElementById('backupFeedback').textContent = '🗑️ 全部数据已清除';
+                    document.getElementById('backupFeedback').className = 'feedback';
+                }
+            });
+
+            // ============================================================
+            // 导入导出
+            // ============================================================
+            const uploadZone = document.getElementById('uploadZone'),
+                fileInput = document.getElementById('fileInput');
+            uploadZone.addEventListener('click', () => fileInput.click());
+            uploadZone.addEventListener('dragover', (e) => { e.preventDefault();
+                uploadZone.style.borderColor = 'var(--primary)';
+                uploadZone.style.background = 'rgba(238,242,255,0.6)'; });
+            uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = 'var(--gray-300)';
+                uploadZone.style.background = 'rgba(255,255,255,0.4)'; });
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.style.borderColor = 'var(--gray-300)';
+                uploadZone.style.background = 'rgba(255,255,255,0.4)';
+                if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files;
+                    handleFileUpload(e.dataTransfer.files[0]); }
+            });
+            fileInput.addEventListener('change', function() { if (this.files.length) { handleFileUpload(this.files[0]);
+                    this.value = ''; } });
+
+            function handleFileUpload(file) {
+                const feedback = document.getElementById('importFeedback');
+                feedback.textContent = '⏳ 正在解析...';
+                feedback.className = 'feedback';
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        if (!json || !json.length) { feedback.textContent = '⚠️ 文件为空';
+                            feedback.className = 'feedback error';
+                            showToast('文件为空', 'error'); return; }
+                        const headers = Object.keys(json[0]);
+                        const idKey = headers.find(h => h.includes('学号') || h.includes('编号') || h.includes('ID') || h
+                            .includes('id'));
+                        const nameKey = headers.find(h => h.includes('姓名') || h.includes('名字') || h.includes(
+                            'name') || h.includes('Name'));
+                        const genderKey = headers.find(h => h.includes('性别') || h.includes('gender') || h.includes(
+                            'Gender'));
+                        if (!idKey || !nameKey) {
+                            feedback.textContent = '⚠️ 未找到"学号"或"姓名"列';
+                            feedback.className = 'feedback error';
+                            showToast('未找到"学号"或"姓名"列', 'error');
+                            return;
+                        }
+                        let emps = DB.getEmployees();
+                        let added = 0,
+                            skipped = 0;
+                        json.forEach(row => {
+                            const id = String(row[idKey] || '').trim().toUpperCase();
+                            const name = String(row[nameKey] || '').trim();
+                            let gender = '';
+                            if (genderKey) { const g = String(row[genderKey] || '').trim(); if (g === '男' || g ===
+                                    '女') gender = g; }
+                            if (!id || !name) { skipped++; return; }
+                            if (emps.some(e => e.id === id)) { skipped++; return; }
+                            emps.push({ id, name, gender });
+                            added++;
+                        });
+                        DB.setEmployees(emps);
+                        renderAll();
+                        feedback.textContent = `✅ 导入完成：新增 ${added} 人${skipped ? `，跳过 ${skipped} 行` : ''}`;
+                        feedback.className = 'feedback success';
+                        showToast(`导入完成，新增 ${added} 人`, 'success');
+                    } catch (err) {
+                        feedback.textContent = `❌ 解析失败: ${err.message}`;
+                        feedback.className = 'feedback error';
+                        showToast('文件解析失败', 'error');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            document.getElementById('downloadTemplateBtn').addEventListener('click', function() {
+                try {
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+                        ['学号', '姓名', '性别'],
+                        ['S2024001', '张三', '男'],
+                        ['S2024002', '李四', '女'],
+                        ['S2024003', '王五', '']
+                    ]), '模板');
+                    const blob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/octet-stream' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `人员导入模板_${todayStr()}.xlsx`;
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                    showToast('📄 模板下载成功', 'success');
+                } catch (err) { showToast('下载失败: ' + err.message, 'error'); }
+            });
+
+            // ============================================================
+            // 备份
+            // ============================================================
+            document.getElementById('exportBackupBtn').addEventListener('click', function() {
+                const data = {
+                    employees: DB.getEmployees(),
+                    records: DB.getRecords(),
+                    timeRanges: getTimeRanges(),
+                    threshold: getThreshold(),
+                    exportedAt: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `签到备份_${todayStr()}.json`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+                showToast('💾 备份文件已导出', 'success');
+                document.getElementById('backupFeedback').textContent = '✅ 备份导出成功';
+                document.getElementById('backupFeedback').className = 'feedback success';
+            });
+            document.getElementById('importBackupBtn').addEventListener('click', function() { document.getElementById(
+                    'backupFileInput').click(); });
+            document.getElementById('backupFileInput').addEventListener('change', function() {
+                if (this.files.length) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            if (!data.employees || !data.records) { showToast('备份文件格式无效', 'error'); return; }
+                            DB.setEmployees(data.employees);
+                            DB.setRecords(data.records);
+                            if (data.timeRanges) setTimeRanges(data.timeRanges);
+                            if (data.threshold !== undefined) setThreshold(data.threshold);
+                            renderAll();
+                            showToast(`📂 备份恢复成功！导入 ${data.employees.length} 名人员，${data.records.length} 条签到记录`,
+                                'success');
+                            document.getElementById('backupFeedback').textContent =
+                                `✅ 恢复成功，${data.employees.length} 人，${data.records.length} 条记录`;
+                            document.getElementById('backupFeedback').className = 'feedback success';
+                        } catch (err) { showToast('解析备份文件失败: ' + err.message, 'error');
+                            document.getElementById('backupFeedback').textContent = '❌ 解析失败';
+                            document.getElementById('backupFeedback').className = 'feedback error'; }
+                    };
+                    reader.readAsText(this.files[0]);
+                    this.value = '';
+                }
+            });
+
+            // ============================================================
+            // 面板切换
+            // ============================================================
+            let adminOpen = false;
+            document.getElementById('toggleAdminBtn').addEventListener('click', function() {
+                adminOpen = !adminOpen;
+                this.textContent = adminOpen ? '✕ 关闭管理' : '⚙️ 管理';
+                this.classList.toggle('active', adminOpen);
+                document.getElementById('panelCheckin').classList.toggle('active', !adminOpen);
+                document.getElementById('panelAdmin').classList.toggle('active', adminOpen);
+                if (adminOpen) { stopScanner(); } else { setTimeout(initScanner, 300); }
+            });
+
+            // ============================================================
+            // ============================================================
+            // 模板编辑器（增强独立属性）
+            // ============================================================
+            // ============================================================
+
+            let editorActive = false;
+            let selectedComp = 'name';
+            let dragData = null;
+            let zoomLevel = 1.0;
+            let isActualSize = true;
+
+            const editorModal = document.getElementById('templateEditorModal');
+            const canvasInner = document.getElementById('canvasInner');
+            const canvasScroll = document.getElementById('canvasScroll');
+            const zoomSlider = document.getElementById('zoomSlider');
+            const zoomLabel = document.getElementById('zoomLabel');
+            const btnActualSize = document.getElementById('btnActualSize');
+
+            // 属性面板元素
+            const propLabelWidth = document.getElementById('propLabelWidth');
+            const propLabelHeight = document.getElementById('propLabelHeight');
+            const propCompSelect = document.getElementById('propCompSelect');
+            const propCompLeft = document.getElementById('propCompLeft');
+            const propCompTop = document.getElementById('propCompTop');
+            const propCompWidth = document.getElementById('propCompWidth');
+            const propCompHeight = document.getElementById('propCompHeight');
+            const propCompFontSize = document.getElementById('propCompFontSize');
+            const propCompColor = document.getElementById('propCompColor');
+            const propCompBold = document.getElementById('propCompBold');
+
+            // 获取当前编辑中的配置
+            function getEditorConfig() {
+                return JSON.parse(JSON.stringify(getTemplateConfig()));
+            }
+
+            // 渲染画布
+            function renderEditorCanvas(config) {
+                const cfg = config || getEditorConfig();
+                const { labelWidth, labelHeight, components } = cfg;
+
+                canvasInner.style.width = labelWidth + 'mm';
+                canvasInner.style.height = labelHeight + 'mm';
+
+                canvasInner.querySelectorAll('.comp').forEach(el => el.remove());
+
+                compTypes.forEach(type => {
+                    const comp = components[type];
+                    if (!comp) return;
+                    const div = document.createElement('div');
+                    div.className = 'comp';
+                    div.dataset.type = type;
+                    div.style.left = comp.left + 'mm';
+                    div.style.top = comp.top + 'mm';
+                    div.style.width = comp.width + 'mm';
+                    div.style.height = comp.height + 'mm';
+                    const fs = comp.fontSize || 10;
+                    div.style.fontSize = fs + 'pt';
+                    div.style.color = comp.color || '#111827';
+                    div.style.fontWeight = comp.bold ? '700' : '400';
+
+                    const content = document.createElement('div');
+                    content.className = 'comp-content';
+                    const sample = compSampleText[type] || '—';
+                    content.textContent = sample;
+                    div.appendChild(content);
+
+                    const label = document.createElement('span');
+                    label.className = 'comp-label';
+                    label.textContent = compLabels[type] || type;
+                    div.appendChild(label);
+
+                    const handle = document.createElement('div');
+                    handle.className = 'resize-handle';
+                    div.appendChild(handle);
+
+                    div.addEventListener('mousedown', (e) => {
+                        if (e.target.closest('.resize-handle')) return;
+                        selectComponent(type);
+                        e.stopPropagation();
+                    });
+
+                    div.addEventListener('mousedown', (e) => {
+                        if (e.target.closest('.resize-handle')) return;
+                        startDrag(e, type);
+                    });
+
+                    handle.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                        startResize(e, type);
+                    });
+
+                    canvasInner.appendChild(div);
+                });
+
+                selectComponent('name');
+                updatePropsPanel(cfg);
+            }
+
+            // 选中组件
+            function selectComponent(type) {
+                selectedComp = type;
+                canvasInner.querySelectorAll('.comp').forEach(el => {
+                    el.classList.toggle('selected', el.dataset.type === type);
+                });
+                propCompSelect.value = type;
+                const cfg = getEditorConfig();
+                updatePropsPanel(cfg);
+            }
+
+            // 更新属性面板
+            function updatePropsPanel(config) {
+                const cfg = config || getEditorConfig();
+                propLabelWidth.value = cfg.labelWidth;
+                propLabelHeight.value = cfg.labelHeight;
+
+                const comp = cfg.components[selectedComp];
+                if (comp) {
+                    propCompLeft.value = comp.left;
+                    propCompTop.value = comp.top;
+                    propCompWidth.value = comp.width;
+                    propCompHeight.value = comp.height;
+                    propCompFontSize.value = comp.fontSize || 10;
+                    propCompColor.value = comp.color || '#111827';
+                    propCompBold.checked = comp.bold !== undefined ? comp.bold : true;
+                }
+            }
+
+            // 从属性面板读取并更新配置
+            function readPropsToConfig() {
+                const cfg = getEditorConfig();
+                cfg.labelWidth = parseFloat(propLabelWidth.value) || 50;
+                cfg.labelHeight = parseFloat(propLabelHeight.value) || 30;
+
+                const comp = cfg.components[selectedComp];
+                if (comp) {
+                    comp.left = parseFloat(propCompLeft.value) || 0;
+                    comp.top = parseFloat(propCompTop.value) || 0;
+                    comp.width = parseFloat(propCompWidth.value) || 10;
+                    comp.height = parseFloat(propCompHeight.value) || 6;
+                    comp.fontSize = parseFloat(propCompFontSize.value) || 10;
+                    comp.color = propCompColor.value || '#111827';
+                    comp.bold = propCompBold.checked;
+                }
+                return cfg;
+            }
+
+            // 同步属性到画布
+            function syncPropsToCanvas() {
+                const cfg = readPropsToConfig();
+                canvasInner.style.width = cfg.labelWidth + 'mm';
+                canvasInner.style.height = cfg.labelHeight + 'mm';
+
+                compTypes.forEach(type => {
+                    const el = canvasInner.querySelector(`.comp[data-type="${type}"]`);
+                    const comp = cfg.components[type];
+                    if (el && comp) {
+                        el.style.left = comp.left + 'mm';
+                        el.style.top = comp.top + 'mm';
+                        el.style.width = comp.width + 'mm';
+                        el.style.height = comp.height + 'mm';
+                        el.style.fontSize = (comp.fontSize || 10) + 'pt';
+                        el.style.color = comp.color || '#111827';
+                        el.style.fontWeight = comp.bold ? '700' : '400';
+                    }
+                });
+                updatePropsPanel(cfg);
+            }
+
+            // 拖拽移动
+            function startDrag(e, type) {
+                const el = canvasInner.querySelector(`.comp[data-type="${type}"]`);
+                if (!el) return;
+                const scale = getCurrentScale();
+                dragData = {
+                    type: type,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origLeft: parseFloat(el.style.left) || 0,
+                    origTop: parseFloat(el.style.top) || 0,
+                    scale: scale
+                };
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragEnd);
+                e.preventDefault();
+            }
+
+            function onDragMove(e) {
+                if (!dragData) return;
+                const dx = (e.clientX - dragData.startX) / (dragData.scale || 1);
+                const dy = (e.clientY - dragData.startY) / (dragData.scale || 1);
+                const pxToMm = 0.2646;
+                const newLeft = dragData.origLeft + dx * pxToMm;
+                const newTop = dragData.origTop + dy * pxToMm;
+
+                const el = canvasInner.querySelector(`.comp[data-type="${dragData.type}"]`);
+                if (el) {
+                    const cfg = getEditorConfig();
+                    const maxLeft = cfg.labelWidth - parseFloat(el.style.width) || 0;
+                    const maxTop = cfg.labelHeight - parseFloat(el.style.height) || 0;
+                    el.style.left = Math.max(0, Math.min(maxLeft, newLeft)) + 'mm';
+                    el.style.top = Math.max(0, Math.min(maxTop, newTop)) + 'mm';
+
+                    const comp = cfg.components[dragData.type];
+                    if (comp) {
+                        comp.left = parseFloat(el.style.left);
+                        comp.top = parseFloat(el.style.top);
+                        updatePropsPanel(cfg);
+                    }
+                }
+                e.preventDefault();
+            }
+
+            function onDragEnd(e) {
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEnd);
+                const cfg = readPropsToConfig();
+                compTypes.forEach(type => {
+                    const el = canvasInner.querySelector(`.comp[data-type="${type}"]`);
+                    if (el && cfg.components[type]) {
+                        cfg.components[type].left = parseFloat(el.style.left) || 0;
+                        cfg.components[type].top = parseFloat(el.style.top) || 0;
+                    }
+                });
+                setTemplateConfig(cfg);
+                dragData = null;
+            }
+
+            // 缩放
+            function startResize(e, type) {
+                const el = canvasInner.querySelector(`.comp[data-type="${type}"]`);
+                if (!el) return;
+                const scale = getCurrentScale();
+                dragData = {
+                    type: type,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origWidth: parseFloat(el.style.width) || 10,
+                    origHeight: parseFloat(el.style.height) || 6,
+                    origLeft: parseFloat(el.style.left) || 0,
+                    origTop: parseFloat(el.style.top) || 0,
+                    scale: scale,
+                    isResize: true
+                };
+                document.addEventListener('mousemove', onResizeMove);
+                document.addEventListener('mouseup', onResizeEnd);
+                e.preventDefault();
+            }
+
+            function onResizeMove(e) {
+                if (!dragData || !dragData.isResize) return;
+                const dx = (e.clientX - dragData.startX) / (dragData.scale || 1);
+                const dy = (e.clientY - dragData.startY) / (dragData.scale || 1);
+                const pxToMm = 0.2646;
+                const newWidth = Math.max(5, dragData.origWidth + dx * pxToMm);
+                const newHeight = Math.max(4, dragData.origHeight + dy * pxToMm);
+
+                const el = canvasInner.querySelector(`.comp[data-type="${dragData.type}"]`);
+                if (el) {
+                    el.style.width = newWidth + 'mm';
+                    el.style.height = newHeight + 'mm';
+                    const cfg = getEditorConfig();
+                    const comp = cfg.components[dragData.type];
+                    if (comp) {
+                        comp.width = newWidth;
+                        comp.height = newHeight;
+                        updatePropsPanel(cfg);
+                    }
+                }
+                e.preventDefault();
+            }
+
+            function onResizeEnd(e) {
+                document.removeEventListener('mousemove', onResizeMove);
+                document.removeEventListener('mouseup', onResizeEnd);
+                const cfg = readPropsToConfig();
+                compTypes.forEach(type => {
+                    const el = canvasInner.querySelector(`.comp[data-type="${type}"]`);
+                    if (el && cfg.components[type]) {
+                        cfg.components[type].width = parseFloat(el.style.width) || 5;
+                        cfg.components[type].height = parseFloat(el.style.height) || 4;
+                    }
+                });
+                setTemplateConfig(cfg);
+                dragData = null;
+            }
+
+            // 缩放控制
+            function getCurrentScale() {
+                const transform = canvasInner.style.transform;
+                if (transform && transform.includes('scale')) {
+                    const match = transform.match(/scale\(([\d.]+)\)/);
+                    if (match) return parseFloat(match[1]);
+                }
+                return 1.0;
+            }
+
+            function setZoom(level) {
+                zoomLevel = Math.max(0.2, Math.min(3.0, level));
+                canvasInner.style.transform = `scale(${zoomLevel})`;
+                canvasInner.style.transformOrigin = 'center center';
+                zoomSlider.value = zoomLevel;
+                zoomLabel.textContent = Math.round(zoomLevel * 100) + '%';
+                isActualSize = Math.abs(zoomLevel - 1.0) < 0.01;
+                btnActualSize.classList.toggle('active', isActualSize);
+            }
+
+            zoomSlider.addEventListener('input', function() {
+                setZoom(parseFloat(this.value));
+            });
+
+            btnActualSize.addEventListener('click', function() {
+                setZoom(1.0);
+            });
+
+            canvasScroll.addEventListener('wheel', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const delta = e.deltaY > 0 ? -0.05 : 0.05;
+                    setZoom(zoomLevel + delta);
+                }
+            }, { passive: false });
+
+            // 打开编辑器
+            function openTemplateEditor() {
+                if (editorActive) return;
+                editorActive = true;
+                const config = getTemplateConfig();
+                renderEditorCanvas(config);
+                editorModal.classList.add('show');
+                setZoom(1.0);
+                stopScanner();
+            }
+
+            // 关闭编辑器
+            function closeTemplateEditor(save = true) {
+                if (!editorActive) return;
+                if (save) {
+                    const cfg = readPropsToConfig();
+                    compTypes.forEach(type => {
+                        const el = canvasInner.querySelector(`.comp[data-type="${type}"]`);
+                        if (el && cfg.components[type]) {
+                            cfg.components[type].left = parseFloat(el.style.left) || 0;
+                            cfg.components[type].top = parseFloat(el.style.top) || 0;
+                            cfg.components[type].width = parseFloat(el.style.width) || 5;
+                            cfg.components[type].height = parseFloat(el.style.height) || 4;
+                            // 颜色、字体等已在 readPropsToConfig 中处理
+                        }
+                    });
+                    setTemplateConfig(cfg);
+                    applyTemplateToLabel();
+                    if (pendingPrintData) {
+                        fillPrintLabel(pendingPrintData.name, pendingPrintData.timestamp, pendingPrintData.status,
+                            pendingPrintData.reprint || false);
+                    }
+                    showToast('✅ 模板已保存', 'success');
+                }
+                editorModal.classList.remove('show');
+                editorActive = false;
+                const panel = document.getElementById('panelCheckin');
+                if (panel.classList.contains('active')) {
+                    setTimeout(initScanner, 400);
+                }
+            }
+
+            // 事件绑定
+            document.getElementById('openTemplateEditorBtn').addEventListener('click', function() {
+                openTemplateEditor();
+            });
+            document.getElementById('closeTemplateEditor').addEventListener('click', function() {
+                closeTemplateEditor(true);
+            });
+            editorModal.addEventListener('click', function(e) {
+                if (e.target === this) closeTemplateEditor(true);
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && editorActive) closeTemplateEditor(true);
+            });
+
+            propCompSelect.addEventListener('change', function() {
+                selectComponent(this.value);
+            });
+
+            document.getElementById('propSyncLabelSize').addEventListener('click', function() {
+                const cfg = readPropsToConfig();
+                canvasInner.style.width = cfg.labelWidth + 'mm';
+                canvasInner.style.height = cfg.labelHeight + 'mm';
+                setTemplateConfig(cfg);
+                showToast('标签尺寸已同步', 'success');
+            });
+
+            document.getElementById('propSyncComp').addEventListener('click', function() {
+                syncPropsToCanvas();
+                const cfg = readPropsToConfig();
+                setTemplateConfig(cfg);
+                showToast('组件属性已同步', 'success');
+            });
+
+            document.getElementById('propSaveAll').addEventListener('click', function() {
+                closeTemplateEditor(true);
+            });
+
+            document.getElementById('propResetDefault').addEventListener('click', async function() {
+                if (await showConfirm('恢复默认布局', '将重置所有模板设置，确定吗？')) {
+                    const def = getDefaultTemplateConfig();
+                    setTemplateConfig(def);
+                    renderEditorCanvas(def);
+                    updatePropsPanel(def);
+                    applyTemplateToLabel();
+                    if (pendingPrintData) {
+                        fillPrintLabel(pendingPrintData.name, pendingPrintData.timestamp, pendingPrintData.status,
+                            pendingPrintData.reprint || false);
+                    }
+                    showToast('已恢复默认布局', 'success');
+                }
+            });
+
+            // ============================================================
+            // 初始化
+            // ============================================================
+            function init() {
+                if (!localStorage.getItem('time_ranges')) {
+                    setTimeRanges([
+                        { start: '08:00', end: '12:00' },
+                        { start: '13:00', end: '17:00' }
+                    ]);
+                }
+                if (!localStorage.getItem('threshold_minutes')) {
+                    setThreshold(30);
+                }
+                if (!localStorage.getItem('label_template_config')) {
+                    setTemplateConfig(getDefaultTemplateConfig());
+                }
+                renderAll();
+                setTimeout(initScanner, 500);
+                setInterval(() => {
+                    updateStatusUI();
+                    document.getElementById('todayDate').textContent = new Date().toLocaleDateString('zh-CN', {
+                        year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
+                    });
+                }, 60000);
+            }
+
+            init();
+
+            document.addEventListener('visibilitychange', function() {
+                const panel = document.getElementById('panelCheckin');
+                if (panel.classList.contains('active')) {
+                    if (document.visibilityState === 'visible') {
+                        if (!scanning && !editorActive) setTimeout(initScanner, 300);
+                    } else {
+                        if (scanning) stopScanner();
+                    }
+                }
+            });
+
+            window.refreshDaily = renderAll;
+
+        })();
+    </script>
+
+</body>
+</html>
